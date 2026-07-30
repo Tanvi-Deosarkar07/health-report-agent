@@ -24,6 +24,13 @@ db.exec(`
     values_json TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_reports_session_uploaded_at ON reports(session_id, uploaded_at);
+
+  CREATE TABLE IF NOT EXISTS upload_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_upload_events_session_created_at ON upload_events(session_id, created_at);
 `);
 
 export default db;

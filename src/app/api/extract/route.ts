@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractReportData } from "@/lib/gemini";
+import { checkAndRecordUpload } from "@/lib/rateLimit";
+import { getOrCreateSessionId } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -7,6 +9,15 @@ const ALLOWED_MIME_TYPES = new Set(["application/pdf", "image/png", "image/jpeg"
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
 export async function POST(request: NextRequest) {
+  const sessionId = await getOrCreateSessionId();
+  const rateLimit = checkAndRecordUpload(sessionId);
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Upload limit reached (5 per hour). Please try again later." },
+      { status: 429 }
+    );
+  }
+
   let formData: FormData;
   try {
     formData = await request.formData();
