@@ -24,6 +24,7 @@ export function UploadFlow() {
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
   const [loadingSampleId, setLoadingSampleId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -100,6 +101,7 @@ export function UploadFlow() {
         const saveData = await saveRes.json();
         if (saveRes.ok) {
           setComparison(saveData.comparison as ComparisonResult | null);
+          setSavedReportId(saveData.report.id as string);
         }
       } catch (err) {
         console.error("Failed to save report history:", err);
@@ -133,6 +135,7 @@ export function UploadFlow() {
     setExtraction(null);
     setInterpretation(null);
     setComparison(null);
+    setSavedReportId(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
@@ -142,6 +145,7 @@ export function UploadFlow() {
         extraction={extraction}
         interpretation={interpretation}
         comparison={comparison}
+        reportId={savedReportId}
         onReset={handleReset}
       />
     );

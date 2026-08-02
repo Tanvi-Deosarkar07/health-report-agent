@@ -97,3 +97,21 @@ export function getRecentFullReports(sessionId: string, limit: number): StoredRe
 
   return rows.map(rowToStoredReport);
 }
+
+export function getReportForSessionById(sessionId: string, id: string): StoredReport | null {
+  const row = db
+    .prepare(`SELECT * FROM reports WHERE session_id = ? AND id = ?`)
+    .get(sessionId, id) as ReportRow | undefined;
+
+  return row ? rowToStoredReport(row) : null;
+}
+
+export function getReportImmediatelyBefore(sessionId: string, uploadedAt: string): StoredReport | null {
+  const row = db
+    .prepare(
+      `SELECT * FROM reports WHERE session_id = ? AND uploaded_at < ? ORDER BY uploaded_at DESC LIMIT 1`
+    )
+    .get(sessionId, uploadedAt) as ReportRow | undefined;
+
+  return row ? rowToStoredReport(row) : null;
+}

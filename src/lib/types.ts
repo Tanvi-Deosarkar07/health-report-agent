@@ -39,3 +39,8 @@ export interface StoredReport extends StoredReportSummary {
   overallSummary: string;
   values: InterpretedTestValue[];
 }
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}

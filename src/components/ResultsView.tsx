@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ComparisonResult } from "@/lib/compare";
 import type { ExtractionResult, InterpretationResult } from "@/lib/types";
+import { ChatPanel } from "./ChatPanel";
 import { ComparisonTable } from "./ComparisonTable";
 import { RiskBadge, RISK_TIER_ORDER } from "./RiskBadge";
 
@@ -8,10 +9,11 @@ interface ResultsViewProps {
   extraction: ExtractionResult;
   interpretation: InterpretationResult;
   comparison: ComparisonResult | null;
+  reportId: string | null;
   onReset: () => void;
 }
 
-export function ResultsView({ extraction, interpretation, comparison, onReset }: ResultsViewProps) {
+export function ResultsView({ extraction, interpretation, comparison, reportId, onReset }: ResultsViewProps) {
   const sortedValues = [...interpretation.values].sort(
     (a, b) => RISK_TIER_ORDER.indexOf(a.riskTier) - RISK_TIER_ORDER.indexOf(b.riskTier)
   );
@@ -104,6 +106,12 @@ export function ResultsView({ extraction, interpretation, comparison, onReset }:
           </div>
         ))}
       </div>
+
+      {reportId ? (
+        <ChatPanel reportId={reportId} />
+      ) : (
+        <p className="text-sm text-foreground/50">Saving your report so you can ask questions about it…</p>
+      )}
     </div>
   );
 }
