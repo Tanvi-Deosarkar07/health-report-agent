@@ -53,6 +53,7 @@ export interface RawExtractedTest {
   test_name: string;
   value: string;
   unit: string | null;
+  referenceRange: string | null;
 }
 
 export interface PatientInfoFromDocument {
@@ -98,4 +99,17 @@ export interface ExplainedTest extends ClassifiedTest {
   remedySuggestions: string[];
   medicationInfo: string | null;
   physicianGuidance: string;
+  // True when tier came from Gemini judging the report's own printed reference range
+  // (because classifier.py didn't recognize the test at all), not the verified classifier table.
+  isTentative: boolean;
+  // The report's own printed range, only populated when isTentative is true (range_used stays
+  // null in that case, since classifier.py found nothing for this test).
+  reportReferenceRange: string | null;
+}
+
+// Input to explainValues: a classified test plus the report's own printed reference range
+// (only ever consulted when the test wasn't recognized by classifier.py at all).
+export interface ClassifiedTestWithReportRange {
+  classified: ClassifiedTest;
+  reportReferenceRange: string | null;
 }

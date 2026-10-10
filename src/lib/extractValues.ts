@@ -31,6 +31,11 @@ const EXTRACTION_SCHEMA: Schema = {
             description: "The measured value exactly as printed, as a string.",
           },
           unit: { type: SchemaType.STRING, nullable: true },
+          referenceRange: {
+            type: SchemaType.STRING,
+            nullable: true,
+            description: "The lab's own printed reference/normal range for this test, exactly as printed, if present.",
+          },
         },
         required: ["test_name", "value"],
       },
@@ -44,10 +49,12 @@ const EXTRACTION_PROMPT = `You are a precise data-extraction assistant for medic
 Your ONLY job is reading values off the document. Do not interpret, classify, or judge any result.
 
 Rules:
-- Extract each distinct test as its own entry: test_name, value, unit.
-- Copy test_name and value EXACTLY as printed. Do not translate, normalize, round, or reinterpret.
+- Extract each distinct test as its own entry: test_name, value, unit, referenceRange.
+- Copy test_name, value, and referenceRange EXACTLY as printed. Do not translate, normalize, round, or reinterpret.
+- referenceRange is the lab's own printed normal/reference range for that specific test (e.g. "13.0 - 17.0",
+  "< 100"), if the document shows one. This is captured as a fallback for tests we don't have verified
+  cutoffs for -- it is not used for tests we already have verified reference data for. Use null if not printed.
 - Do not invent, infer, or hallucinate any test not clearly present in the document.
-- Do not include a reference range -- that is handled separately. Only test_name, value, unit.
 - If visible, extract the patient's age (as a number) and sex (M or F) into patientFromDocument.
   This is informational only -- if not visible or unclear, use null.
 - If the document is not a lab/health report at all, return an empty tests array.
@@ -81,6 +88,7 @@ function normalize(raw: unknown): RawExtractionResult {
         test_name: t.test_name.trim(),
         value: String(t.value ?? "").trim(),
         unit: t.unit ? String(t.unit).trim() : null,
+        referenceRange: t.referenceRange ? String(t.referenceRange).trim() : null,
       })),
   };
 }

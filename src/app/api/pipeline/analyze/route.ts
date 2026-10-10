@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { classifyValues } from "@/lib/classifyValues";
 import { explainValues } from "@/lib/explainValues";
-import type { RawExtractedTest } from "@/lib/types";
+import type { ClassifiedTestWithReportRange, RawExtractedTest } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -54,7 +54,11 @@ export async function POST(request: NextRequest) {
       age,
       sex
     );
-    const explained = await explainValues(classified);
+    const withReportRange: ClassifiedTestWithReportRange[] = classified.map((c, i) => ({
+      classified: c,
+      reportReferenceRange: tests[i]?.referenceRange ?? null,
+    }));
+    const explained = await explainValues(withReportRange);
     return NextResponse.json({ results: explained });
   } catch (error) {
     console.error("Analysis failed:", error);

@@ -20,6 +20,7 @@ export function ClassifiedResultsView({ results, labName, reportDate, onReset }:
   const sorted = [...results].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier));
   const hasCritical = results.some((r) => r.tier === "CRITICAL");
   const hasNeedsReview = results.some((r) => r.needs_review);
+  const hasTentative = results.some((r) => r.isTentative);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
@@ -50,19 +51,34 @@ export function ClassifiedResultsView({ results, labName, reportDate, onReset }:
         </div>
       )}
 
+      {hasTentative && (
+        <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+          One or more results are marked Tentative — classified using the range printed on your
+          report rather than our verified reference data, since we don&apos;t have rules for those
+          specific tests yet.
+        </div>
+      )}
+
       <div className="flex flex-col gap-4">
         {sorted.map((r, i) => (
           <div key={`${r.test_name}-${i}`} className="rounded-lg border border-foreground/10 p-4 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-base font-semibold">{r.test_name}</h2>
-              <TierBadge tier={r.tier} />
+              <div className="flex items-center gap-2">
+                {r.isTentative && (
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800 ring-1 ring-inset ring-blue-300 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/30">
+                    Tentative
+                  </span>
+                )}
+                <TierBadge tier={r.tier} />
+              </div>
             </div>
 
             <p className="mt-1 text-sm text-foreground/70">
               Result: <span className="font-medium text-foreground">{r.value}</span>
               {r.unit ? ` ${r.unit}` : ""}
               {" (reference: "}
-              {formatReferenceRange(r.range_used)}
+              {r.isTentative ? `${r.reportReferenceRange} — from your report, not our verified data` : formatReferenceRange(r.range_used)}
               {")"}
             </p>
 
