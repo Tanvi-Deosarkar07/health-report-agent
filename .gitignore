@@ -40,6 +40,10 @@ yarn-error.log*
 # local sqlite database
 /.data
 
+# python
+__pycache__/
+*.pyc
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

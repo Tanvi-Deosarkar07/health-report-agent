@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRef, useState } from "react";
-import type { ComparisonResult } from "@/lib/compare";
-import type { ExtractionResult, InterpretationResult } from "@/lib/types";
-import { ResultsView } from "./ResultsView";
+import type { ExplainedTest, RawExtractionResult } from "@/lib/types";
+import { ClassifiedResultsView } from "./ClassifiedResultsView";
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -12,19 +10,19 @@ const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 const SAMPLE_REPORTS = [
   { id: "normal", label: "Mostly Normal", url: "/samples/sample-normal.pdf", filename: "sample-normal.pdf" },
   { id: "mixed", label: "Mixed Results", url: "/samples/sample-mixed.pdf", filename: "sample-mixed.pdf" },
-  { id: "urgent", label: "Urgent Flag Example", url: "/samples/sample-urgent.pdf", filename: "sample-urgent.pdf" },
+  { id: "urgent", label: "Critical Flag Example", url: "/samples/sample-urgent.pdf", filename: "sample-urgent.pdf" },
 ] as const;
 
-type Stage = "idle" | "extracting" | "interpreting" | "results" | "error";
+type Stage = "idle" | "extracting" | "analyzing" | "results" | "error";
 
 export function UploadFlow() {
   const [stage, setStage] = useState<Stage>("idle");
   const [file, setFile] = useState<File | null>(null);
+  const [age, setAge] = useState("");
+  const [sex, setSex] = useState<"M" | "F" | "">("");
   const [error, setError] = useState<string | null>(null);
-  const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
-  const [interpretation, setInterpretation] = useState<InterpretationResult | null>(null);
-  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
-  const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [extraction, setExtraction] = useState<RawExtractionResult | null>(null);
+  const [results, setResults] = useState<ExplainedTest[] | null>(null);
   const [loadingSampleId, setLoadingSampleId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +51,15 @@ export function UploadFlow() {
       setError("Please choose a file first.");
       return;
     }
+    const ageNum = Number(age);
+    if (!age || !Number.isFinite(ageNum) || ageNum < 0 || ageNum > 150) {
+      setError("Please enter a valid age.");
+      return;
+    }
+    if (sex !== "M" && sex !== "F") {
+      setError("Please select a sex.");
+      return;
+    }
 
     setError(null);
     setStage("extracting");
@@ -61,12 +68,12 @@ export function UploadFlow() {
       const formData = new FormData();
       formData.append("file", activeFile);
 
-      const extractRes = await fetch("/api/extract", { method: "POST", body: formData });
+      const extractRes = await fetch("/api/pipeline/extract", { method: "POST", body: formData });
       const extractData = await extractRes.json();
       if (!extractRes.ok) {
         throw new Error(extractData.error || "Failed to read the report.");
       }
-      const extractionResult = extractData as ExtractionResult;
+      const extractionResult = extractData as RawExtractionResult;
       setExtraction(extractionResult);
 
       if (extractionResult.tests.length === 0) {
@@ -75,37 +82,18 @@ export function UploadFlow() {
         );
       }
 
-      setStage("interpreting");
-      const interpretRes = await fetch("/api/interpret", {
+      setStage("analyzing");
+      const analyzeRes = await fetch("/api/pipeline/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tests: extractionResult.tests }),
+        body: JSON.stringify({ tests: extractionResult.tests, age: ageNum, sex }),
       });
-      const interpretData = await interpretRes.json();
-      if (!interpretRes.ok) {
-        throw new Error(interpretData.error || "Failed to interpret the report.");
+      const analyzeData = await analyzeRes.json();
+      if (!analyzeRes.ok) {
+        throw new Error(analyzeData.error || "Failed to analyze the report.");
       }
-      const interpretationResult = interpretData as InterpretationResult;
-      setInterpretation(interpretationResult);
-
+      setResults(analyzeData.results as ExplainedTest[]);
       setStage("results");
-
-      // Persist this round for history/comparison. Runs after the results are already
-      // shown, so a save failure doesn't block the user from seeing their report.
-      try {
-        const saveRes = await fetch("/api/reports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ extraction: extractionResult, interpretation: interpretationResult }),
-        });
-        const saveData = await saveRes.json();
-        if (saveRes.ok) {
-          setComparison(saveData.comparison as ComparisonResult | null);
-          setSavedReportId(saveData.report.id as string);
-        }
-      } catch (err) {
-        console.error("Failed to save report history:", err);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
       setStage("error");
@@ -114,6 +102,16 @@ export function UploadFlow() {
 
   async function handleSampleClick(sample: (typeof SAMPLE_REPORTS)[number]) {
     setError(null);
+    const ageNum = Number(age);
+    if (!age || !Number.isFinite(ageNum) || ageNum < 0 || ageNum > 150) {
+      setError("Please enter a valid age before trying a sample.");
+      return;
+    }
+    if (sex !== "M" && sex !== "F") {
+      setError("Please select a sex before trying a sample.");
+      return;
+    }
+
     setLoadingSampleId(sample.id);
     try {
       const res = await fetch(sample.url);
@@ -133,42 +131,58 @@ export function UploadFlow() {
     setFile(null);
     setError(null);
     setExtraction(null);
-    setInterpretation(null);
-    setComparison(null);
-    setSavedReportId(null);
+    setResults(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  if (stage === "results" && extraction && interpretation) {
+  if (stage === "results" && results) {
     return (
-      <ResultsView
-        extraction={extraction}
-        interpretation={interpretation}
-        comparison={comparison}
-        reportId={savedReportId}
+      <ClassifiedResultsView
+        results={results}
+        labName={extraction?.labName ?? null}
+        reportDate={extraction?.reportDate ?? null}
         onReset={handleReset}
       />
     );
   }
 
-  const isBusy = stage === "extracting" || stage === "interpreting";
+  const isBusy = stage === "extracting" || stage === "analyzing";
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-12">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Understand your lab report</h1>
-          <p className="mt-2 text-sm text-foreground/70">
-            Upload a health/lab report and get a plain-language breakdown of each result, with
-            guidance on what to do next.
-          </p>
-        </div>
-        <Link
-          href="/history"
-          className="shrink-0 rounded-md border border-foreground/20 px-3 py-2 text-sm font-medium hover:bg-foreground/5"
-        >
-          History
-        </Link>
+      <div>
+        <h1 className="text-2xl font-semibold">Understand your lab report</h1>
+        <p className="mt-2 text-sm text-foreground/70">
+          Upload a health/lab report and get a plain-language breakdown of each result, with guidance on what to
+          do next.
+        </p>
+      </div>
+
+      <div className="flex gap-4">
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          <span className="font-medium">Age</span>
+          <input
+            type="number"
+            min={0}
+            max={150}
+            value={age}
+            onChange={(e) => setAge(e.target.value)}
+            placeholder="e.g. 47"
+            className="rounded-md border border-foreground/20 bg-transparent px-3 py-2 outline-none focus:border-foreground/40"
+          />
+        </label>
+        <label className="flex flex-1 flex-col gap-1 text-sm">
+          <span className="font-medium">Sex</span>
+          <select
+            value={sex}
+            onChange={(e) => setSex(e.target.value as "M" | "F" | "")}
+            className="rounded-md border border-foreground/20 bg-transparent px-3 py-2 outline-none focus:border-foreground/40"
+          >
+            <option value="">Select…</option>
+            <option value="M">Male</option>
+            <option value="F">Female</option>
+          </select>
+        </label>
       </div>
 
       <label
@@ -218,8 +232,8 @@ export function UploadFlow() {
       >
         {stage === "extracting"
           ? "Reading your report…"
-          : stage === "interpreting"
-            ? "Interpreting results…"
+          : stage === "analyzing"
+            ? "Classifying and explaining…"
             : "Analyze report"}
       </button>
     </div>
