@@ -1,10 +1,13 @@
 import type { ExplainedTest, RangeUsed } from "@/lib/types";
+import { AskReportChat } from "./AskReportChat";
 import { TierBadge, TIER_ORDER } from "./TierBadge";
 
 interface ClassifiedResultsViewProps {
   results: ExplainedTest[];
   labName: string | null;
   reportDate: string | null;
+  age: number;
+  sex: "M" | "F";
   onReset: () => void;
 }
 
@@ -16,7 +19,14 @@ function formatReferenceRange(r: RangeUsed | null): string {
   return "not available for this test";
 }
 
-export function ClassifiedResultsView({ results, labName, reportDate, onReset }: ClassifiedResultsViewProps) {
+export function ClassifiedResultsView({
+  results,
+  labName,
+  reportDate,
+  age,
+  sex,
+  onReset,
+}: ClassifiedResultsViewProps) {
   const sorted = [...results].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier));
   const hasCritical = results.some((r) => r.tier === "CRITICAL");
   const hasNeedsReview = results.some((r) => r.needs_review);
@@ -113,6 +123,8 @@ export function ClassifiedResultsView({ results, labName, reportDate, onReset }:
           </div>
         ))}
       </div>
+
+      <AskReportChat results={results} age={age} sex={sex} labName={labName} reportDate={reportDate} />
     </div>
   );
 }

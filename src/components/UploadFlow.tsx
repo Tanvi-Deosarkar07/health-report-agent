@@ -23,6 +23,8 @@ export function UploadFlow() {
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<RawExtractionResult | null>(null);
   const [results, setResults] = useState<ExplainedTest[] | null>(null);
+  const [submittedAge, setSubmittedAge] = useState<number | null>(null);
+  const [submittedSex, setSubmittedSex] = useState<"M" | "F" | null>(null);
   const [loadingSampleId, setLoadingSampleId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +95,8 @@ export function UploadFlow() {
         throw new Error(analyzeData.error || "Failed to analyze the report.");
       }
       setResults(analyzeData.results as ExplainedTest[]);
+      setSubmittedAge(ageNum);
+      setSubmittedSex(sex);
       setStage("results");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -132,15 +136,19 @@ export function UploadFlow() {
     setError(null);
     setExtraction(null);
     setResults(null);
+    setSubmittedAge(null);
+    setSubmittedSex(null);
     if (inputRef.current) inputRef.current.value = "";
   }
 
-  if (stage === "results" && results) {
+  if (stage === "results" && results && submittedAge !== null && submittedSex !== null) {
     return (
       <ClassifiedResultsView
         results={results}
         labName={extraction?.labName ?? null}
         reportDate={extraction?.reportDate ?? null}
+        age={submittedAge}
+        sex={submittedSex}
         onReset={handleReset}
       />
     );
