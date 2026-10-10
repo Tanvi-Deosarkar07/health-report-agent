@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ReadingLevel } from "@/lib/rewordValues";
 import type { ChatMessage, ExplainedTest } from "@/lib/types";
 
 interface AskReportChatProps {
@@ -9,9 +10,19 @@ interface AskReportChatProps {
   sex: "M" | "F";
   labName: string | null;
   reportDate: string | null;
+  readingLevel: ReadingLevel;
+  language: string;
 }
 
-export function AskReportChat({ results, age, sex, labName, reportDate }: AskReportChatProps) {
+export function AskReportChat({
+  results,
+  age,
+  sex,
+  labName,
+  reportDate,
+  readingLevel,
+  language,
+}: AskReportChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -37,6 +48,8 @@ export function AskReportChat({ results, age, sex, labName, reportDate }: AskRep
           sex,
           labName,
           reportDate,
+          readingLevel,
+          language,
           history: priorHistory,
           message: trimmed,
         }),

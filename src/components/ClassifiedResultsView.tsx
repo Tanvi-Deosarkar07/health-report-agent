@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import type { ReadingLevel } from "@/lib/rewordValues";
 import type { ExplainedTest, RangeUsed } from "@/lib/types";
 import { AskReportChat } from "./AskReportChat";
 import { TierBadge, TIER_ORDER } from "./TierBadge";
@@ -10,6 +14,8 @@ interface ClassifiedResultsViewProps {
   sex: "M" | "F";
   onReset: () => void;
 }
+
+const LANGUAGES = ["English", "Spanish", "Hindi", "French", "Chinese (Simplified)", "Arabic"];
 
 function formatReferenceRange(r: RangeUsed | null): string {
   if (!r) return "not available for this test";
@@ -27,10 +33,45 @@ export function ClassifiedResultsView({
   sex,
   onReset,
 }: ClassifiedResultsViewProps) {
-  const sorted = [...results].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier));
-  const hasCritical = results.some((r) => r.tier === "CRITICAL");
-  const hasNeedsReview = results.some((r) => r.needs_review);
-  const hasTentative = results.some((r) => r.isTentative);
+  const [readingLevel, setReadingLevel] = useState<ReadingLevel>("standard");
+  const [language, setLanguage] = useState("English");
+  const [displayResults, setDisplayResults] = useState<ExplainedTest[]>(results);
+  const [isRewording, setIsRewording] = useState(false);
+  const [rewordError, setRewordError] = useState<string | null>(null);
+
+  async function applyReword(level: ReadingLevel, lang: string) {
+    setReadingLevel(level);
+    setLanguage(lang);
+    setRewordError(null);
+
+    if (level === "standard" && lang === "English") {
+      setDisplayResults(results);
+      return;
+    }
+
+    setIsRewording(true);
+    try {
+      const res = await fetch("/api/pipeline/reword", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ results, readingLevel: level, language: lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to reword results.");
+      }
+      setDisplayResults(data.results as ExplainedTest[]);
+    } catch (err) {
+      setRewordError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setIsRewording(false);
+    }
+  }
+
+  const sorted = [...displayResults].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier));
+  const hasCritical = displayResults.some((r) => r.tier === "CRITICAL");
+  const hasNeedsReview = displayResults.some((r) => r.needs_review);
+  const hasTentative = displayResults.some((r) => r.isTentative);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
@@ -48,6 +89,52 @@ export function ClassifiedResultsView({
           Analyze another report
         </button>
       </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-foreground/10 bg-foreground/[0.02] px-4 py-3">
+        <span className="text-sm font-medium text-foreground/70">Reading level:</span>
+        <div className="flex overflow-hidden rounded-md border border-foreground/20">
+          <button
+            onClick={() => applyReword("standard", language)}
+            disabled={isRewording}
+            className={`px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed ${
+              readingLevel === "standard" ? "bg-foreground text-background" : "hover:bg-foreground/5"
+            }`}
+          >
+            Standard
+          </button>
+          <button
+            onClick={() => applyReword("simple", language)}
+            disabled={isRewording}
+            className={`px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed ${
+              readingLevel === "simple" ? "bg-foreground text-background" : "hover:bg-foreground/5"
+            }`}
+          >
+            Simple
+          </button>
+        </div>
+
+        <span className="ml-2 text-sm font-medium text-foreground/70">Language:</span>
+        <select
+          value={language}
+          onChange={(e) => applyReword(readingLevel, e.target.value)}
+          disabled={isRewording}
+          className="rounded-md border border-foreground/20 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-foreground/40 disabled:cursor-not-allowed"
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
+
+        {isRewording && <span className="text-sm text-foreground/50">Rewording…</span>}
+      </div>
+
+      {rewordError && (
+        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+          {rewordError}
+        </p>
+      )}
 
       {hasCritical && (
         <div className="rounded-lg border border-red-400 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300">
@@ -124,7 +211,15 @@ export function ClassifiedResultsView({
         ))}
       </div>
 
-      <AskReportChat results={results} age={age} sex={sex} labName={labName} reportDate={reportDate} />
+      <AskReportChat
+        results={displayResults}
+        age={age}
+        sex={sex}
+        labName={labName}
+        reportDate={reportDate}
+        readingLevel={readingLevel}
+        language={language}
+      />
     </div>
   );
 }

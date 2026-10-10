@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatAboutReport } from "@/lib/chatAboutReport";
+import type { ReadingLevel } from "@/lib/rewordValues";
 import type { ChatMessage, ExplainedTest, Tier } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 const VALID_TIERS: Tier[] = ["NORMAL", "BORDERLINE", "CRITICAL", "UNKNOWN"];
+const VALID_LEVELS: ReadingLevel[] = ["standard", "simple"];
 
 interface ChatBody {
   results?: unknown;
@@ -14,6 +16,8 @@ interface ChatBody {
   reportDate?: unknown;
   history?: unknown;
   message?: unknown;
+  readingLevel?: unknown;
+  language?: unknown;
 }
 
 function isValidResults(value: unknown): value is ExplainedTest[] {
@@ -55,7 +59,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const { results, age, sex, labName, reportDate, history, message } = (body ?? {}) as ChatBody;
+  const { results, age, sex, labName, reportDate, history, message, readingLevel, language } = (body ?? {}) as ChatBody;
+
+  const effectiveReadingLevel: ReadingLevel =
+    typeof readingLevel === "string" && (VALID_LEVELS as string[]).includes(readingLevel)
+      ? (readingLevel as ReadingLevel)
+      : "standard";
+  const effectiveLanguage = typeof language === "string" && language.trim().length > 0 ? language : "English";
 
   if (!isValidResults(results)) {
     return NextResponse.json({ error: "'results' must be a non-empty array of analyzed test results." }, { status: 400 });
@@ -81,6 +91,8 @@ export async function POST(request: NextRequest) {
         sex,
         labName: typeof labName === "string" ? labName : null,
         reportDate: typeof reportDate === "string" ? reportDate : null,
+        readingLevel: effectiveReadingLevel,
+        language: effectiveLanguage,
       },
       history,
       message

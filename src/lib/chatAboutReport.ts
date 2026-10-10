@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { ReadingLevel } from "./rewordValues";
 import type { ChatMessage, ExplainedTest } from "./types";
 
 const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
@@ -17,6 +18,8 @@ interface ReportContext {
   sex: "M" | "F";
   labName: string | null;
   reportDate: string | null;
+  readingLevel: ReadingLevel;
+  language: string;
 }
 
 function describeResultForPrompt(r: ExplainedTest): string {
@@ -28,8 +31,16 @@ function describeResultForPrompt(r: ExplainedTest): string {
 
 function buildSystemInstruction(ctx: ReportContext): string {
   const resultsSummary = ctx.results.map(describeResultForPrompt).join("\n");
+  const levelInstruction =
+    ctx.readingLevel === "simple"
+      ? "Use very simple, plain language -- short sentences, everyday words, no medical jargon, as if explaining to someone with no medical background."
+      : "Use clear, standard plain language.";
+  const languageInstruction =
+    ctx.language.toLowerCase() === "english" ? "" : ` Reply entirely in ${ctx.language}.`;
 
   return `You are a cautious health-literacy assistant answering follow-up questions about ONE specific lab report you have already summarized for this user (age ${ctx.age}, sex ${ctx.sex}). You are NOT a doctor and must never behave like one.
+
+${levelInstruction}${languageInstruction}
 
 REPORT CONTEXT (the only data you may reason about):
 Lab: ${ctx.labName ?? "unknown"}
