@@ -36,7 +36,7 @@ const REWORD_SCHEMA: Schema = {
 
 function describeForPrompt(r: ExplainedTest, index: number): string {
   const tentativeNote = r.isTentative
-    ? " (TENTATIVE -- say so explicitly: classified from the report's own printed range, not verified reference data)"
+    ? ` (TENTATIVE -- say so explicitly: classified from ${r.reportReferenceRange ? "the report's own printed range" : "general medical knowledge, since no reference range was available"}, not verified reference data)`
     : "";
   return `${index + 1}. ${r.test_name} = ${r.value}${r.unit ? ` ${r.unit}` : ""}
    TIER (fixed, do not reassess): ${r.tier}${tentativeNote}

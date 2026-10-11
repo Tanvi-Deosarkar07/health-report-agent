@@ -5,10 +5,18 @@ const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
 const TENTATIVE_TIERS: Tier[] = ["NORMAL", "BORDERLINE", "CRITICAL"];
 
-// Eligible only when classifier.py has zero data for this test (not merely a missing
-// age/sex row) AND the report itself printed a reference range to fall back on.
-function isEligibleForTentative(c: ClassifiedTest, reportReferenceRange: string | null): boolean {
-  return c.tier === "UNKNOWN" && c.reason === "test not in reference table" && reportReferenceRange !== null;
+// Eligible when classifier.py has zero data for this test (not merely a missing age/sex row)
+// AND the value is a real number to judge. The report's own printed range is used when present;
+// otherwise Gemini falls back to its own general medical knowledge of typical ranges for that
+// test. A non-numeric value stays needs_review regardless -- there's nothing to compare.
+function isNumericValue(value: number | string): boolean {
+  if (typeof value === "number") return Number.isFinite(value);
+  const trimmed = value.trim();
+  return trimmed.length > 0 && Number.isFinite(Number(trimmed));
+}
+
+function isEligibleForTentative(c: ClassifiedTest): boolean {
+  return c.tier === "UNKNOWN" && c.reason === "test not in reference table" && isNumericValue(c.value);
 }
 
 // "tentativeTier" exists ONLY so eligible (unrecognized-test) items can get a real status
@@ -33,7 +41,7 @@ const EXPLANATION_SCHEMA: Schema = {
             format: "enum",
             enum: [...TENTATIVE_TIERS],
             description:
-              "ONLY for items explicitly marked [TENTATIVE CLASSIFICATION NEEDED] below -- your best-effort NORMAL/BORDERLINE/CRITICAL judgment using the report's own printed range. Null for every other item.",
+              "ONLY for items explicitly marked [TENTATIVE CLASSIFICATION NEEDED] below -- your best-effort NORMAL/BORDERLINE/CRITICAL judgment using the report's printed range, or your own general medical knowledge if no range was printed. Null for every other item, and null if you don't recognize the test at all.",
           },
           explanation: {
             type: SchemaType.STRING,
@@ -67,16 +75,22 @@ const EXPLANATION_SCHEMA: Schema = {
 function describeTestForPrompt(item: ClassifiedTestWithReportRange, index: number): string {
   const { classified: t, reportReferenceRange } = item;
 
-  if (isEligibleForTentative(t, reportReferenceRange)) {
+  if (isEligibleForTentative(t)) {
+    const rangeSource = reportReferenceRange
+      ? `The report itself printed this reference range: "${reportReferenceRange}". Judge NORMAL / BORDERLINE / CRITICAL from the value vs. that printed range.`
+      : `No reference range was printed on the report or found in our table. If you recognize this as a real clinical lab test, use your own general medical knowledge of typical reference ranges for it to judge NORMAL / BORDERLINE / CRITICAL. If you do not recognize this as a real lab test at all, set tentativeTier to null instead of guessing.`;
+
     return `${index + 1}. ${t.test_name} = ${t.value}${t.unit ? ` ${t.unit}` : ""}
    [TENTATIVE CLASSIFICATION NEEDED] This test is not in our verified reference table.
-   The report itself printed this reference range: "${reportReferenceRange}"
-   Judge NORMAL / BORDERLINE / CRITICAL yourself from the value vs. that printed range, using
-   the same severity meaning used elsewhere: BORDERLINE = outside normal but not immediately
+   ${rangeSource}
+   Use the same severity meaning used elsewhere: BORDERLINE = outside normal but not immediately
    dangerous; CRITICAL = outside a safe range, prompt medical attention warranted.
-   Set tentativeTier to your judgment. Your explanation and physicianGuidance MUST make clear
-   this classification is tentative -- based on the report's own printed range, not our
-   verified reference data.`;
+   If you SET a tentativeTier: your explanation and physicianGuidance MUST make clear this
+   classification is tentative and not from our verified reference data${reportReferenceRange ? " -- based on the report's own printed range" : " -- based on general medical knowledge, since no reference range was available"}.
+   If you LEAVE tentativeTier null (test not recognized): do not use the word "tentative" --
+   instead explain plainly this test/marker isn't recognized and couldn't be classified,
+   exactly as you would for any other unrecognized item, and physicianGuidance should say to
+   verify this value and test name with a healthcare professional or lab.`;
   }
 
   const range = t.range_used;
@@ -134,7 +148,7 @@ function isTier(value: unknown): value is Tier {
 
 function mergeExplanation(item: ClassifiedTestWithReportRange, raw: RawExplanationItem | undefined): ExplainedTest {
   const { classified, reportReferenceRange } = item;
-  const eligible = isEligibleForTentative(classified, reportReferenceRange);
+  const eligible = isEligibleForTentative(classified);
 
   // Only ever trust a tentativeTier for an item WE already flagged eligible server-side --
   // never for a classifier-backed item, even if the model included one anyway.

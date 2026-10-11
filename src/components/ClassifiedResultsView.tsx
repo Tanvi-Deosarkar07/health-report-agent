@@ -151,8 +151,8 @@ export function ClassifiedResultsView({
       {hasTentative && (
         <div className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
           One or more results are marked Tentative — classified using the range printed on your
-          report rather than our verified reference data, since we don&apos;t have rules for those
-          specific tests yet.
+          report, or general medical knowledge when no range was printed, rather than our
+          verified reference data, since we don&apos;t have rules for those specific tests yet.
         </div>
       )}
 
@@ -175,7 +175,11 @@ export function ClassifiedResultsView({
               Result: <span className="font-medium text-foreground">{r.value}</span>
               {r.unit ? ` ${r.unit}` : ""}
               {" (reference: "}
-              {r.isTentative ? `${r.reportReferenceRange} — from your report, not our verified data` : formatReferenceRange(r.range_used)}
+              {r.isTentative
+                ? r.reportReferenceRange
+                  ? `${r.reportReferenceRange} — from your report, not our verified data`
+                  : "estimated from general medical knowledge, not our verified data"
+                : formatReferenceRange(r.range_used)}
               {")"}
             </p>
 

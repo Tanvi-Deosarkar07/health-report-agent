@@ -24,7 +24,7 @@ interface ReportContext {
 
 function describeResultForPrompt(r: ExplainedTest): string {
   const tentativeNote = r.isTentative
-    ? " (TENTATIVE -- classified from the report's own printed range, not our verified data)"
+    ? ` (TENTATIVE -- classified from ${r.reportReferenceRange ? "the report's own printed range" : "general medical knowledge, since no reference range was available"}, not our verified data)`
     : "";
   return `- ${r.test_name}: ${r.value}${r.unit ? ` ${r.unit}` : ""} -- tier: ${r.tier}${tentativeNote}. ${r.explanation}`;
 }
