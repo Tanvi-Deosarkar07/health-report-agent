@@ -1,6 +1,10 @@
 # Health Report Explainer
 
-An AI-assisted app that reads a lab report (PDF or image), classifies each result against reference ranges, and explains it in plain language — with the classification and the explanation deliberately handled by two different systems.
+**[Try it live →](#)** &nbsp;|&nbsp; An AI-assisted app that reads a lab report (PDF or image), classifies each result against reference ranges, and explains it in plain language — with the classification and the explanation deliberately handled by two different systems.
+
+## The problem
+
+Lab reports hand people a wall of numbers and a tiny reference range column, and leave the interpretation to a follow-up appointment that might be weeks out. Most people can't tell "this is mildly outside normal and worth mentioning next visit" from "this needs attention this week" — so everything either gets ignored or triggers a 2am symptom-search spiral. This app gives a same-day, plain-language read on each result, tiered by actual urgency, with a clear answer to the one question that matters most: *should I see someone about this, and how soon?*
 
 ![Upload screen](docs/screenshots/01-upload.png)
 
