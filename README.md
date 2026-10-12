@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Health Report Explainer
 
-## Getting Started
+An AI-assisted app that reads a lab report (PDF or image), classifies each result against reference ranges, and explains it in plain language — with the classification and the explanation deliberately handled by two different systems.
 
-First, run the development server:
+![Upload screen](docs/screenshots/01-upload.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Why this is interesting
+
+The core design decision: **an LLM should never be the thing deciding whether a result is dangerous.**
+
+Most "AI explains your lab report" demos hand the whole job to the model — extraction, classification, and explanation all in one prompt. That's fast to build and easy to get subtly wrong, since a model's idea of "borderline" vs. "critical" isn't grounded in anything auditable.
+
+This app splits the pipeline into three stages with a hard boundary between them:
+
+```
+PDF/image
+   │
+   ▼
+① Extraction (Gemini, structured JSON output)
+   Reads test_name / value / unit off the document. Nothing else — no judgment calls.
+   │
+   ▼
+② Classification (classifier.py, deterministic)
+   A plain Python rules engine checks each value against an age/sex-aware reference
+   table (reference_ranges.json) and assigns NORMAL / BORDERLINE / CRITICAL / UNKNOWN.
+   No model call. Invoked from the Next.js API route via a stdin/stdout subprocess.
+   │
+   ▼
+③ Explanation (Gemini, tier is a locked input)
+   Gemini explains *why* a result matters, suggests safe lifestyle steps, and tells the
+   user when to see a doctor — grounded in the tier from step ②, which it cannot see a
+   way to change: the response schema has no "tier" field at all, so there's structurally
+   nowhere for a different opinion to go, even if the model tried to express one.
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+One consequence of building it this way: I found a real bug. `classifier.py`'s own bundled self-test was failing 2 of 9 cases — the comparison logic read the "borderline" cutoffs into variables and then never used them, so a result had to cross the far more extreme "critical" cutoff before being flagged, silently under-classifying things like a hemoglobin of 8.9 g/dL as merely borderline. Because classification is deterministic and testable in isolation, that was a two-line fix with a clear before/after instead of an AI hallucination I'd have had to take on faith.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Upload or try a sample** — PDF/image upload, or three synthetic sample reports (normal / mixed / critical) for an instant demo with no real data needed
+- **Deterministic risk tiering** — age/sex-aware classification against an editable reference-range table, not an LLM guess
+- **Tentative fallback for unrecognized tests** — if a test isn't in the reference table, the app falls back to the report's own printed range, or Gemini's general medical knowledge if no range is printed — always visibly flagged "Tentative," never confused with a verified result
+- **Ask Your Report** — follow-up chat grounded only in that specific report; refuses to answer about tests not present rather than inventing data
+- **Reading-level & language toggle** — re-expresses the same locked results as plain/simple language or in another language, without ever re-deciding a tier
+- **Safety-constrained throughout** — no diagnostic language, no medication names or dosing, explicit "seek care now" framing for anything critical, persistent non-medical-advice disclaimer
 
-## Learn More
+![Results screen with Critical flags](docs/screenshots/02-results-top.png)
 
-To learn more about Next.js, take a look at the following resources:
+![Ask Your Report chat](docs/screenshots/03-chat.png)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tech stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend/API:** Next.js (App Router), TypeScript, Tailwind CSS
+- **AI:** Google Gemini (`@google/generative-ai`), structured JSON output mode
+- **Classification:** Python (stdlib only), invoked from Node via `child_process`
+- **Storage:** none for the active pipeline — fully stateless per session by design
 
-## Deploy on Vercel
+> Note: an earlier iteration of this project used Gemini to assign risk tiers directly and stored report history in SQLite for round-over-round comparison. That code is still in the repo (`src/lib/interpret.ts`, `src/lib/reports.ts`, the `/history` page) but disconnected from the active UI after the architecture above replaced it — kept rather than deleted in case it's worth reviving.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Running locally
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm install
+cp .env.local.example .env.local   # add your GEMINI_API_KEY (free tier at aistudio.google.com)
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). Python 3 must be on `PATH` for the classification step (`classifier.py` / `classify_cli.py`).
+
+## Important caveats
+
+- **`reference_ranges.json` is illustrative placeholder data for a portfolio project**, not clinically verified. A real deployment would need a qualified SME to own and source that table from an authoritative reference. This is surfaced directly in the UI's persistent disclaimer.
+- This tool never produces diagnostic language, medication names, or dosing — informational only, not a substitute for professional care.
