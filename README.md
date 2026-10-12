@@ -24,10 +24,13 @@ PDF/image
    Reads test_name / value / unit off the document. Nothing else — no judgment calls.
    │
    ▼
-② Classification (classifier.py, deterministic)
-   A plain Python rules engine checks each value against an age/sex-aware reference
-   table (reference_ranges.json) and assigns NORMAL / BORDERLINE / CRITICAL / UNKNOWN.
-   No model call. Invoked from the Next.js API route via a stdin/stdout subprocess.
+② Classification (deterministic, no model call)
+   A plain rules engine checks each value against an age/sex-aware reference table
+   (reference_ranges.json) and assigns NORMAL / BORDERLINE / CRITICAL / UNKNOWN.
+   Originally written as classifier.py (still in the repo as the canonical reference,
+   with its own smoke test); src/lib/classifier.ts is a byte-for-byte-logic TypeScript
+   port of it, used at runtime so this deploys as a standard Vercel Node function with
+   no Python runtime dependency. Verified to match the Python version on every test case.
    │
    ▼
 ③ Explanation (Gemini, tier is a locked input)
@@ -37,7 +40,7 @@ PDF/image
    nowhere for a different opinion to go, even if the model tried to express one.
 ```
 
-One consequence of building it this way: I found a real bug. `classifier.py`'s own bundled self-test was failing 2 of 9 cases — the comparison logic read the "borderline" cutoffs into variables and then never used them, so a result had to cross the far more extreme "critical" cutoff before being flagged, silently under-classifying things like a hemoglobin of 8.9 g/dL as merely borderline. Because classification is deterministic and testable in isolation, that was a two-line fix with a clear before/after instead of an AI hallucination I'd have had to take on faith.
+One consequence of building it this way: I found a real bug. `classifier.py`'s own bundled self-test was failing 2 of 9 cases — the comparison logic read the "borderline" cutoffs into variables and then never used them, so a result had to cross the far more extreme "critical" cutoff before being flagged, silently under-classifying things like a hemoglobin of 8.9 g/dL as merely borderline. Because classification is deterministic and testable in isolation, that was a two-line fix with a clear before/after instead of an AI hallucination I'd have had to take on faith. (The TypeScript port carries the same fix — same 9/9 against the same cases.)
 
 ## Features
 
@@ -56,8 +59,9 @@ One consequence of building it this way: I found a real bug. `classifier.py`'s o
 
 - **Frontend/API:** Next.js (App Router), TypeScript, Tailwind CSS
 - **AI:** Google Gemini (`@google/generative-ai`), structured JSON output mode
-- **Classification:** Python (stdlib only), invoked from Node via `child_process`
+- **Classification:** deterministic rules engine — originally Python (`classifier.py`, kept as the canonical reference), ported to TypeScript (`src/lib/classifier.ts`) for the deployed app
 - **Storage:** none for the active pipeline — fully stateless per session by design
+- **Deploy target:** Vercel
 
 > Note: an earlier iteration of this project used Gemini to assign risk tiers directly and stored report history in SQLite for round-over-round comparison. That code is still in the repo (`src/lib/interpret.ts`, `src/lib/reports.ts`, the `/history` page) but disconnected from the active UI after the architecture above replaced it — kept rather than deleted in case it's worth reviving.
 
@@ -69,7 +73,9 @@ cp .env.local.example .env.local   # add your GEMINI_API_KEY (free tier at aistu
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Python 3 must be on `PATH` for the classification step (`classifier.py` / `classify_cli.py`).
+Open [http://localhost:3000](http://localhost:3000).
+
+Python 3 is only needed if you want to independently run/modify `classifier.py` directly (`python3 classifier.py` runs its own smoke test) — the app itself uses the TypeScript port and has no Python dependency at runtime.
 
 ## Important caveats
 
